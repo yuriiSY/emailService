@@ -1,0 +1,85 @@
+version: "3.9"
+
+services:
+  elasticsearch:
+    image: elasticsearch:8.14.0
+    container_name: elasticsearch
+    healthcheck:
+      test: curl -s -f http://localhost:9200/_cat/health || exit 1
+      interval: 30s
+      timeout: 20s
+      retries: 10
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    networks:
+      - shared-network
+
+  kibana:
+    image: kibana:8.14.0
+    container_name: kibana
+    networks:
+      - shared-network
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    container_name: zookeeper
+    ports:
+      - '2181:2181'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - shared-network
+
+  kafka:
+    image: 'bitnami/kafka:latest'
+    container_name: kafka
+    ports:
+      - '9092:9092'
+      - '29092:29092'
+    env_file:
+      - ./.env
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,EXTERNAL://:29092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+    networks:
+      - shared-network
+    depends_on:
+      - zookeeper
+
+  email-sender-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: email-service
+    restart: on-failure
+    ports:
+      - "9097:8080"
+    networks:
+      - shared-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTICSEARCH_HOSTS=elasticsearch:9200
+      - SPRING_MAIL_HOST=smtp.gmail.com
+      - SPRING_MAIL_PORT=587
+      - SPRING_MAIL_USERNAME=${USERNAME}
+      - SPRING_MAIL_PASSWORD=${PASSWORD}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - DEBUG=true
+
+networks:
+  shared-network:
+    external: true
