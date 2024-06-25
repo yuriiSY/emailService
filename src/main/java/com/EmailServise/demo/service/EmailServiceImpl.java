@@ -19,7 +19,7 @@ import java.util.List;
 @Service
 @EnableAsync(proxyTargetClass = true)
 @RequiredArgsConstructor
-public class EmailServiceImpl {
+public class EmailServiceImpl implements EmailService{
 
     private final JavaMailSender mailSender;
 
@@ -27,7 +27,7 @@ public class EmailServiceImpl {
 
     @Value("${spring.mail.username}")
     private String emailUsername;
-
+    @Override
     public EmailMessage sendMessage(EmailMessage emailMessage) {
         try {
             send(emailMessage);
